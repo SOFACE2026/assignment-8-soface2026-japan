@@ -13,7 +13,7 @@ zmq::context_t ctx;
 std::map<std::string,zmq::socket_t> name_to_socket;
 std::mutex name_to_socket_lock;
 
-void send_func(std::string whereis_endpoint)
+void send_func(std::string whereis_endpoint, std::string sender_name) // add sender_name as argument to send_func, such that the client can include its name in the message to the recipient
 {   
 
     zmq::socket_t sock(ctx,zmq::socket_type::req);
@@ -64,7 +64,8 @@ void send_func(std::string whereis_endpoint)
         {
             maybe_socket = name_to_socket.find(recipient);
             std::cout << "sending message: '" << text << "' to: '" << recipient << "'" << std::endl; 
-            maybe_socket->second.send(zmq::buffer(text));
+            std::string full_message = sender_name + "," + text; // add sender name to the message, such that the recipient can see who sent the message
+            maybe_socket->second.send(zmq::buffer(full_message)); // full_message includes the name of the sender, such that the recipient can see who sent the message
         }
     }
     
@@ -78,9 +79,15 @@ void recv_func(std::string endpoint)
     
 
     while(true)
+    // receive a message from another client
     {
         auto _ = sock.recv(msg);
-        std::cout << "recieved message: '" << msg.to_string() << "'" << std::endl;
+        std::string received = msg.to_string(); // convert the message to a string, such that we can split it into sender and text
+        auto split = received.find(","); // split the message into sender and text, comma is used as delimiter
+        std::string sender = received.substr(0, split); // split the message into sender and text, comma is used as delimiter
+        std::string text = received.substr(split + 1); // split the message into sender and text, comma is used as delimiter
+
+        std::cout << "received message from '" << sender << "': '" << text << "'" << std::endl; // add sender to the message, such that the recipient can see who sent the message
     }
 }
 
@@ -112,7 +119,7 @@ int main(int argc, char **argv)
     std::cout << "client successfully registered" << std::endl;
     std::cout << "to send a message type a message of the form: 'recipient,message' and then press enter" << std::endl;
 
-    std::thread send_thread(send_func,server_whereis_client_endpoint);
+    std::thread send_thread(send_func,server_whereis_client_endpoint, name); // add name as argument to send_func, such that the client can include its name in the message to the recipient
     std::thread recv_thread(recv_func,recv_endpoint);
 
     send_thread.join();
